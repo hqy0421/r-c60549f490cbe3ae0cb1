@@ -74,15 +74,18 @@ func (cli Cli) Run(args []string) int {
 		onlySQL   string
 		tableName string
 
-		inFlag      inputFlag
-		inDelimiter string
-		inHeader    bool
-		inSkip      int
-		inPreRead   int
-		inJQuery    string
-		inLimitRead int
-		inNull      nilString
-		inRowNumber bool
+		inFlag       inputFlag
+		inDelimiter  string
+		inHeader     bool
+		inSkip       int
+		inPreRead    int
+		inJQuery     string
+		inLimitRead  int
+		inNull       nilString
+		inRowNumber  bool
+		inBatchTable string
+		inBatchID    string
+		inBatchMode  string
 
 		outFlag         outputFlag
 		outFile         string
@@ -125,6 +128,9 @@ func (cli Cli) Run(args []string) int {
 	flags.StringVar(&inJQuery, "ijq", "", "jq expression string for input(JSON/JSONL only).")
 	flags.Var(&inNull, "inull", "value(string) to convert to null on input.")
 	flags.BoolVar(&inRowNumber, "inum", false, "add row number column.")
+	flags.StringVar(&inBatchTable, "ibtable", "", "target table name for batch import (default: file name).")
+	flags.StringVar(&inBatchID, "ibid", "", "batch identity of the delivered file (enables batch import).")
+	flags.StringVar(&inBatchMode, "ibmode", "replace", "how to handle a revised batch. [ replace | error ]")
 
 	flags.BoolVar(&inFlag.CSV, "icsv", false, "CSV format for input.")
 	flags.BoolVar(&inFlag.LTSV, "iltsv", false, "LTSV format for input.")
@@ -241,6 +247,16 @@ func (cli Cli) Run(args []string) int {
 		}
 	}
 
+	batchMode, err := batchModeValue(inBatchMode)
+	if err != nil {
+		log.Printf("ERROR: %s", err)
+		return 1
+	}
+
+	if inBatchID != "" && transientDSN(driver, dsn) {
+		log.Printf("WARNING: batch import with a transient database: the batch registry does not persist across runs")
+	}
+
 	importer := trdsql.NewImporter(
 		trdsql.InFormat(inputFormat(inFlag)),
 		trdsql.InDelimiter(inDelimiter),
@@ -252,6 +268,9 @@ func (cli Cli) Run(args []string) int {
 		trdsql.InNeedNULL(inNull.valid),
 		trdsql.InNULL(inNull.str),
 		trdsql.InRowNumber(inRowNumber),
+		trdsql.InBatchTable(inBatchTable),
+		trdsql.InBatchID(inBatchID),
+		trdsql.InBatchMode(batchMode),
 	)
 
 	writer := cli.OutStream
@@ -537,6 +556,27 @@ func isInFormat(name string) bool {
 	switch name {
 	case "ig", "icsv", "iltsv", "ijson", "iyaml", "itbln", "iwidth", "itext", "ilogfmt":
 		return true
+	}
+	return false
+}
+
+// batchModeValue converts the -ibmode flag value to a trdsql.BatchMode.
+func batchModeValue(mode string) (trdsql.BatchMode, error) {
+	switch strings.ToLower(mode) {
+	case "replace":
+		return trdsql.BatchReplace, nil
+	case "error":
+		return trdsql.BatchError, nil
+	default:
+		return trdsql.BatchReplace, fmt.Errorf("unknown batch mode: %q [ replace | error ]", mode)
+	}
+}
+
+// transientDSN returns true if the database does not persist across runs.
+func transientDSN(driver string, dsn string) bool {
+	switch driver {
+	case "", "sqlite", "sqlite3", "sqlite3_ext":
+		return dsn == "" || dsn == ":memory:"
 	}
 	return false
 }

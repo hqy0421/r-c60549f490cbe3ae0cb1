@@ -754,3 +754,52 @@ func Test_guessCompression(t *testing.T) {
 		})
 	}
 }
+
+func Test_batchModeValue(t *testing.T) {
+	tests := []struct {
+		name    string
+		mode    string
+		want    trdsql.BatchMode
+		wantErr bool
+	}{
+		{name: "replace", mode: "replace", want: trdsql.BatchReplace, wantErr: false},
+		{name: "error", mode: "error", want: trdsql.BatchError, wantErr: false},
+		{name: "upper", mode: "ERROR", want: trdsql.BatchError, wantErr: false},
+		{name: "unknown", mode: "append", want: trdsql.BatchReplace, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := batchModeValue(tt.mode)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("batchModeValue() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("batchModeValue() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_transientDSN(t *testing.T) {
+	tests := []struct {
+		name   string
+		driver string
+		dsn    string
+		want   bool
+	}{
+		{name: "default", driver: "", dsn: "", want: true},
+		{name: "sqliteMemory", driver: "sqlite", dsn: ":memory:", want: true},
+		{name: "sqliteFile", driver: "sqlite", dsn: "prod.db", want: false},
+		{name: "sqlite3File", driver: "sqlite3", dsn: "prod.db", want: false},
+		{name: "postgres", driver: "postgres", dsn: "", want: false},
+		{name: "mysql", driver: "mysql", dsn: "", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := transientDSN(tt.driver, tt.dsn); got != tt.want {
+				t.Errorf("transientDSN() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

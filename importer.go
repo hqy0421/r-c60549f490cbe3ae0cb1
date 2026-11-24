@@ -246,6 +246,10 @@ func ImportFileContext(ctx context.Context, db *DB, fileName string, readOpts *R
 		}
 	}()
 
+	if opts.InBatchID != "" {
+		return importBatchFileContext(ctx, db, file, fileName, opts)
+	}
+
 	reader, err := NewReader(file, opts)
 	if err != nil {
 		return "", err

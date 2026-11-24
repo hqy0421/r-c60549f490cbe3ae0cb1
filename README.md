@@ -202,6 +202,38 @@ trdsql -o[output format] -t [input filename]
 * `-inum` add row number column.
 * `-ir` **int** number of rows to preread. (default 1)
 * `-is` **int** skip header row.
+* `-ibtable` **string** target table name for batch import (default: file name).
+* `-ibid` **string** batch identity of the delivered file (enables batch import).
+* `-ibmode` **string** how to handle a revised batch. [ replace | error ] (default "replace")
+
+####  3.2.2. <a name='batch-import'></a>Batch import
+
+Daily archives that carry a batch number can be imported idempotently
+into a stable target table of a persistent database
+(`-dsn` a database file, MySQL or PostgreSQL; temporary in-memory
+databases do not keep the batch registry across runs).
+
+```console
+$ trdsql -dsn prod.db -ih -ibtable production -ibid 20261124-b002 \
+    "SELECT * FROM prod_20261124_b002.csv"
+```
+
+Every imported row is tagged with the batch identity in the `_batch_id`
+column, so the import and the visible scope of the batch in the target
+table use one consistent batch identity. The fingerprint of each
+delivered batch is recorded in the `_trdsql_batch_registry` table and
+used on the next delivery of the same batch:
+
+* exact duplicate (same batch identity, same content): nothing is
+  written again; the rows already in the target table are used.
+* revised (same batch identity, different content): the rows of that
+  batch are replaced according to `-ibmode`
+  (`replace` re-imports the batch, `error` rejects the delivery).
+  Rows of other batches are not touched and remain as report input.
+
+The replacement runs in the same transaction as the import, so a failed
+delivery leaves the target table unchanged. Note that the delivered
+content is buffered in memory to compute its fingerprint.
 
 ###  3.3. <a name='output-formats'></a>Output formats
 

@@ -127,21 +127,49 @@ type ReadOpts struct {
 
 	// InRowNumber indicates whether to add a row number column.
 	InRowNumber bool
+
+	// InBatchTable is the target table name for batch import.
+	// If empty, the table name is derived from the file name.
+	// It is used only when InBatchID is set.
+	InBatchTable string
+
+	// InBatchID is the batch identity of the delivered file.
+	// When set, the import becomes batch aware: the delivered
+	// content is fingerprinted and recorded in a batch registry,
+	// and every imported row is tagged with this identity in the
+	// InBatchColumn column. An exact duplicate delivery (same
+	// identity and same content) is not written again. A revised
+	// delivery (same identity, different content) is handled
+	// according to InBatchMode.
+	// If empty, batch import is disabled (default).
+	InBatchID string
+
+	// InBatchColumn is the name of the column that stores
+	// the batch identity on each imported row.
+	// default is "_batch_id".
+	InBatchColumn string
+
+	// InBatchMode determines how a revised batch (same batch
+	// identity with different content) is handled.
+	// default is BatchReplace.
+	InBatchMode BatchMode
 }
 
 // NewReadOpts returns a ReadOpts.
 func NewReadOpts(options ...ReadOpt) *ReadOpts {
 	readOpts := &ReadOpts{
-		InFormat:    GUESS,
-		InPreRead:   1,
-		InLimitRead: false,
-		InSkip:      0,
-		InDelimiter: ",",
-		InHeader:    false,
-		IsTemporary: true,
-		InJQuery:    "",
-		InNeedNULL:  false,
-		InNULL:      "",
+		InFormat:      GUESS,
+		InPreRead:     1,
+		InLimitRead:   false,
+		InSkip:        0,
+		InDelimiter:   ",",
+		InHeader:      false,
+		IsTemporary:   true,
+		InJQuery:      "",
+		InNeedNULL:    false,
+		InNULL:        "",
+		InBatchColumn: DefaultBatchColumn,
+		InBatchMode:   BatchReplace,
 	}
 	for _, option := range options {
 		option(readOpts)
@@ -224,6 +252,36 @@ func IsTemporary(t bool) ReadOpt {
 func InRowNumber(t bool) ReadOpt {
 	return func(args *ReadOpts) {
 		args.InRowNumber = t
+	}
+}
+
+// InBatchTable sets the target table name for batch import.
+func InBatchTable(table string) ReadOpt {
+	return func(args *ReadOpts) {
+		args.InBatchTable = table
+	}
+}
+
+// InBatchID sets the batch identity of the delivered file.
+// Setting it enables batch aware import.
+func InBatchID(id string) ReadOpt {
+	return func(args *ReadOpts) {
+		args.InBatchID = id
+	}
+}
+
+// InBatchColumn sets the name of the column that stores
+// the batch identity on each imported row.
+func InBatchColumn(column string) ReadOpt {
+	return func(args *ReadOpts) {
+		args.InBatchColumn = column
+	}
+}
+
+// InBatchMode sets how a revised batch is handled.
+func InBatchMode(mode BatchMode) ReadOpt {
+	return func(args *ReadOpts) {
+		args.InBatchMode = mode
 	}
 }
 
